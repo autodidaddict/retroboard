@@ -2,7 +2,7 @@ extern crate redis;
 extern crate rustc_serialize;
 use rustc_serialize::json;
 
-use {add_user, create_board, Board};
+use {add_user, create_board, Board, add_stickynote, StickyNote};
 
 #[test]
 fn add_user_updates_set_and_hash() {
@@ -66,6 +66,7 @@ fn create_board_creates_appropriate_structures() {
             let s: String = redis::cmd("GET").arg("board:90").query(&con).unwrap();
             let decoded: Board = json::decode(&s).unwrap();
             assert_eq!(decoded.id, 90);
+            assert_eq!(board.id, decoded.id);
             assert_eq!(decoded.name, "Test board");
             assert_eq!(decoded.owner, "kevin");
             assert_eq!(&decoded.groups, &["a", "b", "c"]);
@@ -74,6 +75,50 @@ fn create_board_creates_appropriate_structures() {
     };
 
     purge_boards(&con);
+}
+
+#[test]
+fn add_stickynote_creates_appropriate_structures() {
+    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+    let con = client.get_connection().unwrap();
+
+    purge_notes(&con);
+
+    redis::cmd("INCRBY").arg("id:stickynotes").arg(89).execute(&con);
+    let note = StickyNote {
+        id: 0,
+        timestamp: 0,
+        title: "New Note".to_string(),
+        content: "Content".to_string(),
+        owner: "kevin".to_string(),
+        boardid: 325,
+    };
+    match add_stickynote(&con, &note) {
+        Ok(note) => {
+            let ids: Vec<u64> = redis::cmd("ZRANGE")
+                .arg("board:325:stickynotes")
+                .arg(0)
+                .arg(-1)
+                .query(&con)
+                .unwrap();
+            assert_eq!(1, ids.len());
+            let s: String = redis::cmd("GET").arg("stickynote:90").query(&con).unwrap();
+            let decoded: StickyNote = json::decode(&s).unwrap();
+            assert_eq!(90, decoded.id);
+            assert_eq!(note.id, decoded.id);
+            assert_eq!("New Note", decoded.title);
+            assert_eq!("Content", decoded.content);
+        }
+        Err(_) => assert!(false),
+    };
+
+    purge_notes(&con);
+}
+
+fn purge_notes(con: &redis::Connection) {
+    redis::cmd("DEL").arg("stickynote:90").execute(con);
+    redis::cmd("DEL").arg("board:325:stickynotes").execute(con);
+    redis::cmd("DEL").arg("id:stickynotes").execute(con);
 }
 
 fn purge_boards(con: &redis::Connection) {
