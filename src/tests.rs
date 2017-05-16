@@ -2,7 +2,7 @@ extern crate redis;
 extern crate rustc_serialize;
 use rustc_serialize::json;
 
-use add_user;
+use {add_user, create_board, Board};
 
 #[test]
 fn add_user_updates_set_and_hash() {
@@ -43,6 +43,43 @@ fn add_user_updates_set_and_hash() {
 
     purge_kevin(&con);
 
+}
+
+#[test]
+fn create_board_creates_appropriate_structures() {
+    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+    let con = client.get_connection().unwrap();
+
+    purge_boards(&con);
+
+    redis::cmd("INCRBY").arg("id:boards").arg(89).execute(&con);
+    let board = Board {
+        id: 0,
+        name: "Test board".to_string(),
+        owner: "kevin".to_string(),
+        groups: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+    };
+    match create_board(&con, &board) {
+        Ok(board) => {
+            let ids: Vec<u64> = redis::cmd("SMEMBERS").arg("boards").query(&con).unwrap();
+            assert_eq!(1, ids.len());
+            let s: String = redis::cmd("GET").arg("board:90").query(&con).unwrap();
+            let decoded: Board = json::decode(&s).unwrap();
+            assert_eq!(decoded.id, 90);
+            assert_eq!(decoded.name, "Test board");
+            assert_eq!(decoded.owner, "kevin");
+            assert_eq!(&decoded.groups, &["a", "b", "c"]);
+        }
+        Err(_) => assert!(false),
+    };
+
+    purge_boards(&con);
+}
+
+fn purge_boards(con: &redis::Connection) {
+    redis::cmd("DEL").arg("boards").execute(con);
+    redis::cmd("DEL").arg("id:boards").execute(con);
+    redis::cmd("DEL").arg("board:90").execute(con);
 }
 
 fn purge_kevin(con: &redis::Connection) {
