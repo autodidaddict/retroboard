@@ -1,0 +1,10 @@
+[package]
+name = "retroboard"
+version = "0.1.0"
+authors = ["Kevin Hoffman <alothien@gmail.com>"]
+description = "A sample illustrating the use of Redis as a persistence store for a retrospective board app"
+license = "MIT/Apache-2.0"
+
+[dependencies]
+redis = "0.8.0"
+rustc-serialize = "0.3.23"
