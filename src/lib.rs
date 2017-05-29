@@ -3,6 +3,7 @@ extern crate rustc_serialize;
 extern crate time;
 use rustc_serialize::json;
 
+
 pub fn add_user(con: &redis::Connection,
                 username: &str,
                 firstname: &str,
@@ -48,6 +49,18 @@ pub fn create_board(con: &redis::Connection, board: &Board) -> Result<Board, Str
         Err(e) => Err(format!("{}", e)),
     };
     res
+}
+
+pub fn get_boards(con: &redis::Connection) -> Result<Vec<Board>, String> {
+    let mut boards: Vec<Board> = Vec::new();
+
+    let ids: Vec<u64> = redis::cmd("SMEMBERS").arg("boards").query(con).unwrap();
+    for id in ids {
+        let s: String = redis::cmd("GET").arg(format!("board:{}", id)).query(con).unwrap();
+        let decoded: Board = json::decode(&s).unwrap();
+        boards.push(decoded);
+    }
+    Ok(boards)
 }
 
 pub fn add_stickynote(con: &redis::Connection, note: &StickyNote) -> Result<StickyNote, String> {

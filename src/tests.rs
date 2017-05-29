@@ -2,14 +2,14 @@ extern crate redis;
 extern crate rustc_serialize;
 use rustc_serialize::json;
 
-use {add_user, create_board, Board, add_stickynote, StickyNote};
+use {add_user, create_board, get_boards, Board, add_stickynote, StickyNote};
 
 #[test]
 fn add_user_updates_set_and_hash() {
     let client = redis::Client::open("redis://127.0.0.1/").unwrap();
     let con = client.get_connection().unwrap();
 
-    purge_kevin(&con);
+    purge_redis(&con);
 
     match add_user(&con, "kevin", "Kevin", "Hoffman", "foo@bar.com") {
         Ok(_) => assert!(true),
@@ -41,7 +41,7 @@ fn add_user_updates_set_and_hash() {
         .unwrap();
     assert_eq!(email, "foo@bar.com");
 
-    purge_kevin(&con);
+    purge_redis(&con);
 
 }
 
@@ -50,7 +50,7 @@ fn create_board_creates_appropriate_structures() {
     let client = redis::Client::open("redis://127.0.0.1/").unwrap();
     let con = client.get_connection().unwrap();
 
-    purge_boards(&con);
+    purge_redis(&con);
 
     redis::cmd("INCRBY").arg("id:boards").arg(89).execute(&con);
     let board = Board {
@@ -74,7 +74,40 @@ fn create_board_creates_appropriate_structures() {
         Err(_) => assert!(false),
     };
 
-    purge_boards(&con);
+    purge_redis(&con);
+}
+
+#[test]
+fn get_boards_returns_board_list() {
+    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+    let con = client.get_connection().unwrap();
+
+    purge_redis(&con);
+
+    let board = Board {
+        id: 0,
+        name: "First board".to_string(),
+        owner: "kevin".to_string(),
+        groups: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+    };
+    let board2 = Board {
+        id: 0,
+        name: "Second board".to_string(),
+        ..board.clone()
+    };
+    create_board(&con, &board).unwrap();
+    create_board(&con, &board).unwrap();
+    create_board(&con, &board2).unwrap();
+    match get_boards(&con) {
+        Ok(boardlist) => {
+            assert_eq!(3, boardlist.len());
+            assert_eq!("First board", boardlist[0].name);
+            assert_eq!("Second board", boardlist[2].name);
+        }
+        Err(_) => assert!(false),
+    }
+
+    purge_redis(&con);
 }
 
 #[test]
@@ -82,7 +115,7 @@ fn add_stickynote_creates_appropriate_structures() {
     let client = redis::Client::open("redis://127.0.0.1/").unwrap();
     let con = client.get_connection().unwrap();
 
-    purge_notes(&con);
+    purge_redis(&con);
 
     redis::cmd("INCRBY").arg("id:stickynotes").arg(89).execute(&con);
     let note = StickyNote {
@@ -112,33 +145,9 @@ fn add_stickynote_creates_appropriate_structures() {
         Err(_) => assert!(false),
     };
 
-    purge_notes(&con);
+    purge_redis(&con);
 }
 
-fn purge_notes(con: &redis::Connection) {
-    redis::cmd("DEL").arg("stickynote:90").execute(con);
-    redis::cmd("DEL").arg("board:325:stickynotes").execute(con);
-    redis::cmd("DEL").arg("id:stickynotes").execute(con);
-}
-
-fn purge_boards(con: &redis::Connection) {
-    redis::cmd("DEL").arg("boards").execute(con);
-    redis::cmd("DEL").arg("id:boards").execute(con);
-    redis::cmd("DEL").arg("board:90").execute(con);
-}
-
-fn purge_kevin(con: &redis::Connection) {
-    redis::cmd("DEL").arg("users").execute(con);
-    redis::cmd("HDEL")
-        .arg("user:kevin")
-        .arg("firstname")
-        .execute(con);
-    redis::cmd("HDEL")
-        .arg("user:kevin")
-        .arg("lastname")
-        .execute(con);
-    redis::cmd("HDEL")
-        .arg("user:kevin")
-        .arg("email")
-        .execute(con);
+fn purge_redis(con: &redis::Connection) {
+    redis::cmd("FLUSHDB").execute(con);
 }
