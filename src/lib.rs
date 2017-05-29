@@ -90,6 +90,19 @@ pub fn add_stickynote(con: &redis::Connection, note: &StickyNote) -> Result<Stic
     res
 }
 
+pub fn get_stickynotes(con: &redis::Connection, boardId: u64) -> Result<Vec<StickyNote>, String> {
+    let mut notes: Vec<StickyNote> = Vec::new();
+
+    let ids: Vec<u64> =
+        redis::cmd("SMEMBERS").arg(format!("board:{}:stickynotes", boardId)).query(con).unwrap();
+    for id in ids {
+        let s: String = redis::cmd("GET").arg(format!("stickynote:{}", id)).query(con).unwrap();
+        let decoded: StickyNote = json::decode(&s).unwrap();
+        notes.push(decoded);
+    }
+    Ok(notes)
+}
+
 fn get_timestamp() -> u64 {
     let current_time = time::get_time();
 
