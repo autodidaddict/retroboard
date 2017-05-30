@@ -2,16 +2,21 @@ extern crate redis;
 extern crate serde;
 extern crate serde_json;
 
-use {add_user, create_board, get_boards, Board, add_stickynote, StickyNote};
+use {Board, StickyNote, Redisboard};
+
+#[test]
+fn can_create_board_object() {
+    let _ = Redisboard::new("redis://127.0.0.1/");
+}
 
 #[test]
 fn add_user_updates_set_and_hash() {
-    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-    let con = client.get_connection().unwrap();
+    let board = Redisboard::new("redis://127.0.0.1/");
+    let con = board.client.get_connection().unwrap();
 
     purge_redis(&con);
 
-    match add_user(&con, "kevin", "Kevin", "Hoffman", "foo@bar.com") {
+    match board.add_user("kevin", "Kevin", "Hoffman", "foo@bar.com") {
         Ok(_) => assert!(true),
         Err(_) => assert!(false),
     };
@@ -41,14 +46,14 @@ fn add_user_updates_set_and_hash() {
         .unwrap();
     assert_eq!(email, "foo@bar.com");
 
-    purge_redis(&con);
+    purge_redis(&board.client.get_connection().unwrap());
 
 }
 
 #[test]
 fn create_board_creates_appropriate_structures() {
-    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-    let con = client.get_connection().unwrap();
+    let redisboard = Redisboard::new("redis://127.0.0.1/");
+    let con = redisboard.client.get_connection().unwrap();
 
     purge_redis(&con);
 
@@ -59,7 +64,7 @@ fn create_board_creates_appropriate_structures() {
         owner: "kevin".to_string(),
         groups: vec!["a".to_string(), "b".to_string(), "c".to_string()],
     };
-    match create_board(&con, &board) {
+    match redisboard.create_board(&board) {
         Ok(board) => {
             let ids: Vec<u64> = redis::cmd("SMEMBERS").arg("boards").query(&con).unwrap();
             assert_eq!(1, ids.len());
@@ -79,8 +84,8 @@ fn create_board_creates_appropriate_structures() {
 
 #[test]
 fn get_boards_returns_board_list() {
-    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-    let con = client.get_connection().unwrap();
+    let redisboard = Redisboard::new("redis://127.0.0.1/");
+    let con = redisboard.client.get_connection().unwrap();
 
     purge_redis(&con);
 
@@ -95,10 +100,10 @@ fn get_boards_returns_board_list() {
         name: "Second board".to_string(),
         ..board.clone()
     };
-    create_board(&con, &board).unwrap();
-    create_board(&con, &board).unwrap();
-    create_board(&con, &board2).unwrap();
-    match get_boards(&con) {
+    redisboard.create_board( &board).unwrap();
+    redisboard.create_board(&board).unwrap();
+    redisboard.create_board( &board2).unwrap();
+    match redisboard.get_boards() {
         Ok(boardlist) => {
             assert_eq!(3, boardlist.len());
             assert_eq!("First board", boardlist[0].name);
@@ -112,8 +117,8 @@ fn get_boards_returns_board_list() {
 
 #[test]
 fn add_stickynote_creates_appropriate_structures() {
-    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-    let con = client.get_connection().unwrap();
+    let redisboard = Redisboard::new("redis://127.0.0.1/");
+    let con = redisboard.client.get_connection().unwrap();
 
     purge_redis(&con);
 
@@ -126,7 +131,7 @@ fn add_stickynote_creates_appropriate_structures() {
         owner: "kevin".to_string(),
         boardid: 325,
     };
-    match add_stickynote(&con, &note) {
+    match redisboard.add_stickynote(&note) {
         Ok(note) => {
             let ids: Vec<u64> = redis::cmd("ZRANGE")
                 .arg("board:325:stickynotes")
