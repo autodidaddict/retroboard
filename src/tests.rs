@@ -1,6 +1,6 @@
 extern crate redis;
-extern crate rustc_serialize;
-use rustc_serialize::json;
+extern crate serde;
+extern crate serde_json;
 
 use {add_user, create_board, get_boards, Board, add_stickynote, StickyNote};
 
@@ -64,7 +64,7 @@ fn create_board_creates_appropriate_structures() {
             let ids: Vec<u64> = redis::cmd("SMEMBERS").arg("boards").query(&con).unwrap();
             assert_eq!(1, ids.len());
             let s: String = redis::cmd("GET").arg("board:90").query(&con).unwrap();
-            let decoded: Board = json::decode(&s).unwrap();
+            let decoded: Board = serde_json::from_str(&s).unwrap();
             assert_eq!(decoded.id, 90);
             assert_eq!(board.id, decoded.id);
             assert_eq!(decoded.name, "Test board");
@@ -136,7 +136,7 @@ fn add_stickynote_creates_appropriate_structures() {
                 .unwrap();
             assert_eq!(1, ids.len());
             let s: String = redis::cmd("GET").arg("stickynote:90").query(&con).unwrap();
-            let decoded: StickyNote = json::decode(&s).unwrap();
+            let decoded: StickyNote = serde_json::from_str(&s).unwrap();
             assert_eq!(90, decoded.id);
             assert_eq!(note.id, decoded.id);
             assert_eq!("New Note", decoded.title);

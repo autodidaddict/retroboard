@@ -1,7 +1,10 @@
 extern crate redis;
-extern crate rustc_serialize;
+extern crate serde;
+extern crate serde_json;
 extern crate time;
-use rustc_serialize::json;
+
+#[macro_use]
+extern crate serde_derive;
 
 
 pub fn add_user(con: &redis::Connection,
@@ -39,7 +42,7 @@ pub fn create_board(con: &redis::Connection, board: &Board) -> Result<Board, Str
         Ok(newid) => {
             let board = Board { id: newid, ..board.clone() };
             redis::cmd("SADD").arg("boards").arg(newid).execute(con);
-            let encoded = json::encode(&board).unwrap();
+            let encoded = serde_json::to_string(&board).unwrap();
             redis::cmd("SET")
                 .arg(format!("board:{}", board.id))
                 .arg(encoded)
@@ -57,7 +60,7 @@ pub fn get_boards(con: &redis::Connection) -> Result<Vec<Board>, String> {
     let ids: Vec<u64> = redis::cmd("SMEMBERS").arg("boards").query(con).unwrap();
     for id in ids {
         let s: String = redis::cmd("GET").arg(format!("board:{}", id)).query(con).unwrap();
-        let decoded: Board = json::decode(&s).unwrap();
+        let decoded: Board = serde_json::from_str(&s).unwrap();
         boards.push(decoded);
     }
     Ok(boards)
@@ -72,7 +75,7 @@ pub fn add_stickynote(con: &redis::Connection, note: &StickyNote) -> Result<Stic
                 timestamp: ts,
                 ..note.clone()
             };
-            let encoded = json::encode(&note).unwrap();
+            let encoded = serde_json::to_string(&note).unwrap();
             // zadd board:1:stickynotes {stamp} {id}
             redis::cmd("ZADD")
                 .arg(format!("board:{}:stickynotes", note.boardid))
@@ -90,14 +93,14 @@ pub fn add_stickynote(con: &redis::Connection, note: &StickyNote) -> Result<Stic
     res
 }
 
-pub fn get_stickynotes(con: &redis::Connection, boardId: u64) -> Result<Vec<StickyNote>, String> {
+pub fn get_stickynotes(con: &redis::Connection, board_id: u64) -> Result<Vec<StickyNote>, String> {
     let mut notes: Vec<StickyNote> = Vec::new();
 
     let ids: Vec<u64> =
-        redis::cmd("SMEMBERS").arg(format!("board:{}:stickynotes", boardId)).query(con).unwrap();
+        redis::cmd("SMEMBERS").arg(format!("board:{}:stickynotes", board_id)).query(con).unwrap();
     for id in ids {
         let s: String = redis::cmd("GET").arg(format!("stickynote:{}", id)).query(con).unwrap();
-        let decoded: StickyNote = json::decode(&s).unwrap();
+        let decoded: StickyNote = serde_json::from_str(&s).unwrap();
         notes.push(decoded);
     }
     Ok(notes)
@@ -111,7 +114,7 @@ fn get_timestamp() -> u64 {
     milliseconds as u64
 }
 
-#[derive(RustcDecodable, RustcEncodable, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct StickyNote {
     id: u64,
     title: String,
@@ -121,7 +124,7 @@ pub struct StickyNote {
     boardid: u64,
 }
 
-#[derive(RustcDecodable, RustcEncodable, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Board {
     id: u64,
     name: String,
