@@ -6,13 +6,13 @@ extern crate time;
 #[macro_use]
 extern crate serde_derive;
 
-pub struct Redisboard {
+pub struct Retroboard {
     client: redis::Client,
 }
 
-impl Redisboard {
+impl Retroboard {
     pub fn new(cs: &str) -> Self {
-        Redisboard { client: redis::Client::open(cs).unwrap() }
+        Retroboard { client: redis::Client::open(cs).unwrap() }
     }
 
 

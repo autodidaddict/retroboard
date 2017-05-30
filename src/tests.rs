@@ -2,16 +2,16 @@ extern crate redis;
 extern crate serde;
 extern crate serde_json;
 
-use {Board, StickyNote, Redisboard};
+use {Board, StickyNote, Retroboard};
 
 #[test]
 fn can_create_board_object() {
-    let _ = Redisboard::new("redis://127.0.0.1/");
+    let _ = Retroboard::new("redis://127.0.0.1/");
 }
 
 #[test]
 fn add_user_updates_set_and_hash() {
-    let board = Redisboard::new("redis://127.0.0.1/");
+    let board = Retroboard::new("redis://127.0.0.1/");
     let con = board.client.get_connection().unwrap();
 
     purge_redis(&con);
@@ -52,7 +52,7 @@ fn add_user_updates_set_and_hash() {
 
 #[test]
 fn create_board_creates_appropriate_structures() {
-    let redisboard = Redisboard::new("redis://127.0.0.1/");
+    let redisboard = Retroboard::new("redis://127.0.0.1/");
     let con = redisboard.client.get_connection().unwrap();
 
     purge_redis(&con);
@@ -84,7 +84,7 @@ fn create_board_creates_appropriate_structures() {
 
 #[test]
 fn get_boards_returns_board_list() {
-    let redisboard = Redisboard::new("redis://127.0.0.1/");
+    let redisboard = Retroboard::new("redis://127.0.0.1/");
     let con = redisboard.client.get_connection().unwrap();
 
     purge_redis(&con);
@@ -100,9 +100,9 @@ fn get_boards_returns_board_list() {
         name: "Second board".to_string(),
         ..board.clone()
     };
-    redisboard.create_board( &board).unwrap();
     redisboard.create_board(&board).unwrap();
-    redisboard.create_board( &board2).unwrap();
+    redisboard.create_board(&board).unwrap();
+    redisboard.create_board(&board2).unwrap();
     match redisboard.get_boards() {
         Ok(boardlist) => {
             assert_eq!(3, boardlist.len());
@@ -117,7 +117,7 @@ fn get_boards_returns_board_list() {
 
 #[test]
 fn add_stickynote_creates_appropriate_structures() {
-    let redisboard = Redisboard::new("redis://127.0.0.1/");
+    let redisboard = Retroboard::new("redis://127.0.0.1/");
     let con = redisboard.client.get_connection().unwrap();
 
     purge_redis(&con);
