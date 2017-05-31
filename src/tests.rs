@@ -46,7 +46,7 @@ fn add_user_updates_set_and_hash() {
         .unwrap();
     assert_eq!(email, "foo@bar.com");
 
-    purge_redis(&board.client.get_connection().unwrap());
+    purge_redis(&con);
 
 }
 
