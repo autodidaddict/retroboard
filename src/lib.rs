@@ -6,6 +6,28 @@ extern crate time;
 #[macro_use]
 extern crate serde_derive;
 
+
+#[derive(Debug)]
+pub enum BoardError {
+    RedisFailure(redis::RedisError),
+    JsonFailure(serde_json::Error),
+}
+
+impl From<redis::RedisError> for BoardError {
+    fn from(err: redis::RedisError) -> BoardError {
+        BoardError::RedisFailure(err)
+    }
+}
+
+impl From<serde_json::Error> for BoardError {
+    fn from(err: serde_json::Error) -> BoardError {
+        BoardError::JsonFailure(err)
+    }
+}
+
+pub type BoardResult<T> = Result<T, BoardError>;
+
+
 pub struct Retroboard {
     client: redis::Client,
 }
@@ -21,8 +43,8 @@ impl Retroboard {
                     firstname: &str,
                     lastname: &str,
                     email: &str)
-                    -> Result<(), String> {
-        let con = &self.client.get_connection().unwrap();
+                    -> BoardResult<()> {
+        let con = &self.client.get_connection()?;
         let key = format!("user:{}", username);
         redis::cmd("SADD")
             .arg("users")
@@ -46,77 +68,68 @@ impl Retroboard {
         Ok(())
     }
 
-    pub fn create_board(&self, board: &Board) -> Result<Board, String> {
-        let con = &self.client.get_connection().unwrap();
-        let res = match redis::cmd("INCR").arg("id:boards").query(con) {
-            Ok(newid) => {
-                let board = Board { id: newid, ..board.clone() };
-                redis::cmd("SADD").arg("boards").arg(newid).execute(con);
-                let encoded = serde_json::to_string(&board).unwrap();
-                redis::cmd("SET")
-                    .arg(format!("board:{}", board.id))
-                    .arg(encoded)
-                    .execute(con);
-                Ok(board)
-            }
-            Err(e) => Err(format!("{}", e)),
-        };
-        res
+    pub fn create_board(&self, board: &Board) -> BoardResult<Board> {
+        let con = &self.client.get_connection()?;
+        let newid = redis::cmd("INCR").arg("id:boards").query(con)?;
+
+        let board = Board { id: newid, ..board.clone() };
+        redis::cmd("SADD").arg("boards").arg(newid).execute(con);
+        let encoded = serde_json::to_string(&board)?;
+        redis::cmd("SET")
+            .arg(format!("board:{}", board.id))
+            .arg(encoded)
+            .execute(con);
+        Ok(board)
     }
 
-    pub fn get_boards(&self) -> Result<Vec<Board>, String> {
-        let con = &self.client.get_connection().unwrap();
+    pub fn get_boards(&self) -> BoardResult<Vec<Board>> {
+        let con = &self.client.get_connection()?;
         let mut boards: Vec<Board> = Vec::new();
 
-        let ids: Vec<u64> = redis::cmd("SMEMBERS").arg("boards").query(con).unwrap();
+        let ids: Vec<u64> = redis::cmd("SMEMBERS").arg("boards").query(con)?;
         for id in ids {
-            let s: String = redis::cmd("GET").arg(format!("board:{}", id)).query(con).unwrap();
-            let decoded: Board = serde_json::from_str(&s).unwrap();
+            let s: String = redis::cmd("GET").arg(format!("board:{}", id)).query(con)?;
+            let decoded: Board = serde_json::from_str(&s)?;
             boards.push(decoded);
         }
         Ok(boards)
     }
 
-    pub fn add_stickynote(&self, note: &StickyNote) -> Result<StickyNote, String> {
-        let con = &self.client.get_connection().unwrap();
-        let res = match redis::cmd("INCR").arg("id:stickynotes").query(con) {
-            Ok(newid) => {
-                let ts = get_timestamp();
-                let note = StickyNote {
-                    id: newid,
-                    timestamp: ts,
-                    ..note.clone()
-                };
-                let encoded = serde_json::to_string(&note).unwrap();
-                // zadd board:1:stickynotes {stamp} {id}
-                redis::cmd("ZADD")
-                    .arg(format!("board:{}:stickynotes", note.boardid))
-                    .arg(ts)
-                    .arg(newid)
-                    .execute(con);
-                redis::cmd("SET")
-                    .arg(format!("stickynote:{}", note.id))
-                    .arg(encoded)
-                    .execute(con);
-                Ok(note)
-            }
-            Err(e) => Err(format!("{}", e)),
+    pub fn add_stickynote(&self, note: &StickyNote) -> BoardResult<StickyNote> {
+        let con = &self.client.get_connection()?;
+        let newid = redis::cmd("INCR").arg("id:stickynotes").query(con)?;
+
+        let ts = get_timestamp();
+        let note = StickyNote {
+            id: newid,
+            timestamp: ts,
+            ..note.clone()
         };
-        res
+        let encoded = serde_json::to_string(&note)?;
+        // zadd board:1:stickynotes {stamp} {id}
+        redis::cmd("ZADD")
+            .arg(format!("board:{}:stickynotes", note.boardid))
+            .arg(ts)
+            .arg(newid)
+            .execute(con);
+        redis::cmd("SET")
+            .arg(format!("stickynote:{}", note.id))
+            .arg(encoded)
+            .execute(con);
+        Ok(note)
     }
 
-
-    pub fn get_stickynotes(&self, board_id: u64) -> Result<Vec<StickyNote>, String> {
-        let con = &self.client.get_connection().unwrap();
+    pub fn get_stickynotes(&self, board_id: u64) -> BoardResult<Vec<StickyNote>> {
+        let con = &self.client.get_connection()?;
         let mut notes: Vec<StickyNote> = Vec::new();
 
         let ids: Vec<u64> = redis::cmd("SMEMBERS")
             .arg(format!("board:{}:stickynotes", board_id))
-            .query(con)
-            .unwrap();
+            .query(con)?;
+            
         for id in ids {
-            let s: String = redis::cmd("GET").arg(format!("stickynote:{}", id)).query(con).unwrap();
-            let decoded: StickyNote = serde_json::from_str(&s).unwrap();
+            let s: String = redis::cmd("GET").arg(format!("stickynote:{}", id)).query(con)?;
+            let decoded: StickyNote = serde_json::from_str(&s)?;
             notes.push(decoded);
         }
         Ok(notes)
