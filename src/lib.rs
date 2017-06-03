@@ -3,25 +3,27 @@ extern crate serde;
 extern crate serde_json;
 extern crate time;
 
+use std::error::Error;
+
 #[macro_use]
 extern crate serde_derive;
 
 
 #[derive(Debug)]
 pub enum BoardError {
-    RedisFailure(redis::RedisError),
-    JsonFailure(serde_json::Error),
+    RedisFailure(String),
+    JsonFailure(String),
 }
 
 impl From<redis::RedisError> for BoardError {
     fn from(err: redis::RedisError) -> BoardError {
-        BoardError::RedisFailure(err)
+        BoardError::RedisFailure(err.description().to_string())
     }
 }
 
 impl From<serde_json::Error> for BoardError {
     fn from(err: serde_json::Error) -> BoardError {
-        BoardError::JsonFailure(err)
+        BoardError::JsonFailure(err.description().to_string())
     }
 }
 
@@ -123,10 +125,9 @@ impl Retroboard {
         let con = &self.client.get_connection()?;
         let mut notes: Vec<StickyNote> = Vec::new();
 
-        let ids: Vec<u64> = redis::cmd("SMEMBERS")
-            .arg(format!("board:{}:stickynotes", board_id))
+        let ids: Vec<u64> = redis::cmd("SMEMBERS").arg(format!("board:{}:stickynotes", board_id))
             .query(con)?;
-            
+
         for id in ids {
             let s: String = redis::cmd("GET").arg(format!("stickynote:{}", id)).query(con)?;
             let decoded: StickyNote = serde_json::from_str(&s)?;
